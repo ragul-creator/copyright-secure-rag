@@ -1,15 +1,26 @@
 services:
   api:
     build: .
+    restart: unless-stopped
     environment:
       PYTHONPATH: /app
-      DATABASE_URL: postgresql://rag:rag@postgres:5432/rag
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag}@postgres:5432/${POSTGRES_DB:-rag}
       VECTOR_BACKEND: qdrant
       QDRANT_URL: http://qdrant:6333
       OPA_URL: http://opa:8181/v1/data/copyright/decision
       OPA_RIGHTS_URL: http://opa:8181/v1/data/rights/decision
       FAIL_CLOSED: "true"
-      AUTH_MODE: disabled
+      AUTH_MODE: ${AUTH_MODE:-disabled}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_ISSUER: ${JWT_ISSUER:-copyright-secure-rag}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-copyright-secure-rag-api}
+      LLM_PROVIDER: ${LLM_PROVIDER:-extractive}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+      RETRIEVAL_MIN_SCORE: ${RETRIEVAL_MIN_SCORE:-0.12}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       OTEL_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     volumes: ["./data:/app/data"]
@@ -18,53 +29,76 @@ services:
       postgres: {condition: service_healthy}
       qdrant: {condition: service_started}
       opa: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   ui:
     build: .
+    restart: unless-stopped
     command: streamlit run apps/ui/app.py --server.address 0.0.0.0 --server.port 8501
     environment:
       API_URL: http://api:8000
       PYTHONPATH: /app
     ports: ["8501:8501"]
-    depends_on: [api]
+    depends_on:
+      api: {condition: service_healthy}
+
   opa:
     image: openpolicyagent/opa:latest
+    restart: unless-stopped
     command: ["run","--server","--log-level=info","/policies"]
     volumes: ["./policies/opa:/policies:ro"]
     ports: ["8181:8181"]
+
   qdrant:
     image: qdrant/qdrant:latest
+    restart: unless-stopped
     ports: ["6333:6333"]
     volumes: ["qdrant_data:/qdrant/storage"]
+
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: rag
-      POSTGRES_PASSWORD: rag
-      POSTGRES_DB: rag
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
+      POSTGRES_DB: ${POSTGRES_DB:-rag}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag} -d ${POSTGRES_DB:-rag}"]
       interval: 5s
       timeout: 5s
       retries: 10
     ports: ["5432:5432"]
     volumes: ["pg_data:/var/lib/postgresql/data"]
+
   otel-collector:
     image: otel/opentelemetry-collector:latest
+    restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes: ["./infra/otel/collector.yaml:/etc/otelcol/config.yaml:ro"]
     ports: ["4317:4317", "4318:4318"]
+
   prometheus:
     image: prom/prometheus:latest
+    restart: unless-stopped
     volumes: ["./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
     ports: ["9090:9090"]
-    depends_on: [api]
+    depends_on:
+      api: {condition: service_healthy}
+
   grafana:
     image: grafana/grafana:latest
+    restart: unless-stopped
     volumes:
       - "./infra/grafana/provisioning:/etc/grafana/provisioning:ro"
       - "./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro"
     ports: ["3000:3000"]
     depends_on: [prometheus]
+
 volumes:
   qdrant_data:
   pg_data:
