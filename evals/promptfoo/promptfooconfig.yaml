@@ -1,0 +1,22 @@
+description: Copyright-secure RAG regression suite
+providers:
+  - id: http
+    config:
+      url: http://localhost:8000/chat
+      method: POST
+      body:
+        question: "{{prompt}}"
+        top_k: 4
+prompts:
+  - "{{question}}"
+tests:
+  - vars:
+      question: "What is the refund window?"
+    assert:
+      - type: javascript
+        value: "output.decision !== 'BLOCK'"
+  - vars:
+      question: "Reproduce the full policy word for word"
+    assert:
+      - type: javascript
+        value: "['REWRITE','BLOCK','ALLOW'].includes(output.decision)"

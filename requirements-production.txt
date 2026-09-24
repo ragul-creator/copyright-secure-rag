@@ -1,0 +1,4 @@
+-r requirements-infra.txt
+sentence-transformers>=3.0
+nemoguardrails>=0.15
+guardrails-ai>=0.6
