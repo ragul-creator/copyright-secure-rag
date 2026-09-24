@@ -28,3 +28,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker run --rm -v "$PWD/policies/opa:/policies:ro" openpolicyagent/opa:latest check /policies
+      - run: docker run --rm -v "$PWD/policies/opa:/policies:ro" openpolicyagent/opa:latest test /policies
