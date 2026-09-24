@@ -1,0 +1,21 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Chat decisions by type",
+      "targets": [{"expr": "sum by (decision) (rate(rag_chat_requests_total[5m]))", "legendFormat": "{{decision}}"}],
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Ingestion decisions",
+      "targets": [{"expr": "sum by (status) (rate(rag_ingest_total[5m]))", "legendFormat": "{{status}}"}],
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9}
+    }
+  ],
+  "schemaVersion": 39,
+  "title": "Copyright-Secure RAG",
+  "version": 1
+}
