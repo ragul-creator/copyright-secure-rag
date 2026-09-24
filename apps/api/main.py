@@ -3,23 +3,22 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
-from src.models import SourceRegistration, SourceStatusUpdate, IngestRequest, ChatRequest, ChatResponse
+from src.models import SourceRegistration, SourceStatusUpdate, ComplianceEvidenceCreate, IngestRequest, ChatRequest, ChatResponse
 from src.observability import configure_observability
 from src.security.auth import Principal, get_principal, require_roles
-from src.security.licenses import register_source, LicenseError
+from src.security.licenses import register_source, add_compliance_evidence, LicenseError
 from src.services.ingestion import ingest_document
 from src.services.chat import chat
 from src.services.db import query, execute, audit, audit_recent, verify_audit_chain
 
-app=FastAPI(title="Copyright-Secure Customer Support RAG",version="0.2.0")
+app=FastAPI(title="Copyright-Secure Customer Support RAG",version="0.3.0")
 configure_observability(app)
 CHAT=Counter("rag_chat_requests_total","Chat requests",["decision"])
 INGEST=Counter("rag_ingest_total","Ingestion attempts",["status"])
 
 
 @app.get("/health")
-def health():
-    return {"status":"ok"}
+def health(): return {"status":"ok"}
 
 
 @app.get("/whoami")
@@ -43,29 +42,41 @@ def list_sources(principal: Principal = Depends(require_roles("admin","knowledge
 @app.patch("/sources/{source_id}/status")
 def set_source_status(source_id: str, update: SourceStatusUpdate, principal: Principal = Depends(require_roles("admin","knowledge_manager"))):
     rows=query("SELECT source_id FROM sources WHERE tenant_id=? AND source_id=?", (principal.tenant_id,source_id))
-    if not rows:
-        raise HTTPException(404,"Source not found")
+    if not rows: raise HTTPException(404,"Source not found")
     execute("UPDATE sources SET status=? WHERE tenant_id=? AND source_id=?", (update.status,principal.tenant_id,source_id))
     audit({"event":"source_status_changed","source_id":source_id,"status":update.status,"actor":principal.subject}, principal.tenant_id)
     return {"ok":True,"source_id":source_id,"status":update.status}
+
+
+@app.post("/sources/{source_id}/evidence")
+def add_evidence(source_id: str, evidence: ComplianceEvidenceCreate, principal: Principal = Depends(require_roles("admin","knowledge_manager"))):
+    try:
+        add_compliance_evidence(principal.tenant_id,source_id,evidence.tool,evidence.artifact_uri,
+                                evidence.artifact_sha256,evidence.verdict,evidence.details)
+    except LicenseError as exc:
+        raise HTTPException(404,str(exc))
+    return {"ok":True,"source_id":source_id,"verdict":evidence.verdict}
+
+
+@app.get("/sources/{source_id}/evidence")
+def list_evidence(source_id: str, principal: Principal = Depends(require_roles("admin","knowledge_manager"))):
+    return query("""SELECT tool,artifact_uri,artifact_sha256,verdict,details_json,created_at
+                  FROM compliance_evidence WHERE tenant_id=? AND source_id=? ORDER BY id DESC""",
+                 (principal.tenant_id,source_id))
 
 
 @app.post("/ingest")
 def ingest(req: IngestRequest, principal: Principal = Depends(require_roles("admin","knowledge_manager"))):
     try:
         out=ingest_document(principal.tenant_id,req.source_id,req.document_id,req.text)
-        INGEST.labels("allowed").inc()
-        return out
+        INGEST.labels("allowed").inc(); return out
     except LicenseError as e:
-        INGEST.labels("denied").inc()
-        raise HTTPException(403,str(e))
+        INGEST.labels("denied").inc(); raise HTTPException(403,str(e))
 
 
 @app.post("/chat",response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest, principal: Principal = Depends(require_roles("admin","knowledge_manager","support","viewer"))):
-    out=chat(principal.tenant_id,req.question,req.top_k)
-    CHAT.labels(out["decision"]).inc()
-    return out
+    out=chat(principal.tenant_id,req.question,req.top_k); CHAT.labels(out["decision"]).inc(); return out
 
 
 @app.get("/audit/recent")
@@ -81,18 +92,15 @@ def verify_audit(principal: Principal = Depends(require_roles("admin"))):
 @app.get("/admin/overview")
 def overview(principal: Principal = Depends(require_roles("admin","knowledge_manager"))):
     tenant=principal.tenant_id
-    def count(sql):
-        return query(sql,(tenant,))[0]["n"]
-    return {
-        "tenant_id":tenant,
+    def count(sql): return query(sql,(tenant,))[0]["n"]
+    return {"tenant_id":tenant,
         "sources":count("SELECT COUNT(*) AS n FROM sources WHERE tenant_id=?"),
         "approved_sources":count("SELECT COUNT(*) AS n FROM sources WHERE tenant_id=? AND status='approved'"),
         "documents":count("SELECT COUNT(*) AS n FROM documents WHERE tenant_id=?"),
         "chunks":count("SELECT COUNT(*) AS n FROM chunks WHERE tenant_id=?"),
-        "audit_chain_valid":verify_audit_chain(tenant),
-    }
+        "approved_evidence":count("SELECT COUNT(*) AS n FROM compliance_evidence WHERE tenant_id=? AND verdict='approved'"),
+        "audit_chain_valid":verify_audit_chain(tenant)}
 
 
 @app.get("/metrics")
-def metrics():
-    return PlainTextResponse(generate_latest().decode(),media_type=CONTENT_TYPE_LATEST)
+def metrics(): return PlainTextResponse(generate_latest().decode(),media_type=CONTENT_TYPE_LATEST)

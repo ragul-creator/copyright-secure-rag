@@ -2,6 +2,7 @@
 qdrant-client>=1.11
 psycopg[binary]>=3.2
 datasketch>=1.6
+boto3>=1.35
 opentelemetry-api>=1.27
 opentelemetry-sdk>=1.27
 opentelemetry-exporter-otlp>=1.27

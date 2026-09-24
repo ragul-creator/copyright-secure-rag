@@ -2,6 +2,7 @@ from __future__ import annotations
 from src.config import settings
 from src.rag.retriever import Retriever
 from src.security.guardrail_adapters import validate_output
+from src.security.lsh_index import lsh_candidates
 from src.security.similarity import aggregate
 from src.security.policy import decide
 from src.services.db import audit
@@ -12,15 +13,17 @@ class CopyrightOutputGuard:
         self.retriever = Retriever()
 
     def _candidate_union(self, tenant_id: str, answer: str, contexts: list[dict]) -> list[dict]:
-        candidates = self.retriever.search(tenant_id, answer, settings.candidate_limit)
+        semantic = self.retriever.search(tenant_id, answer, settings.candidate_limit)
+        lsh = lsh_candidates(tenant_id, answer, settings.candidate_limit)
         merged = {}
-        for c in [*contexts, *candidates]:
+        for c in [*contexts, *semantic, *lsh]:
             merged[(c["source_id"], c["document_id"], c.get("chunk_id"))] = c
         return list(merged.values())
 
     def evaluate(self, request_id: str, tenant_id: str, answer: str, contexts: list[dict]):
         candidates = self._candidate_union(tenant_id, answer, contexts)
         signals=aggregate(answer,candidates)
+        signals["candidate_scan"]={"total":len(candidates),"lsh_enabled":settings.lsh_enabled}
         external=validate_output(tenant_id,answer,contexts,signals)
         signals["external_guardrails"]=external
         blocked=next((x for x in external if x.get("enabled") and not x.get("allow")),None)

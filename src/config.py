@@ -28,6 +28,7 @@ class Settings:
     opa_url: str = os.getenv("OPA_URL", "")
     opa_rights_url: str = os.getenv("OPA_RIGHTS_URL", "")
     fail_closed: bool = _bool("FAIL_CLOSED", "true")
+    require_compliance_evidence: bool = _bool("REQUIRE_COMPLIANCE_EVIDENCE", "false")
 
     vector_backend: str = os.getenv("VECTOR_BACKEND", "local")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -42,10 +43,16 @@ class Settings:
     semantic_threshold: float = float(os.getenv("COPYRIGHT_SEMANTIC_THRESHOLD", "0.96"))
     minhash_threshold: float = float(os.getenv("COPYRIGHT_MINHASH_THRESHOLD", "0.70"))
     candidate_limit: int = int(os.getenv("COPYRIGHT_CANDIDATE_LIMIT", "8"))
+    lsh_enabled: bool = _bool("COPYRIGHT_LSH_ENABLED", "true")
 
     nemo_guardrails_url: str = os.getenv("NEMO_GUARDRAILS_URL", "")
     guardrails_ai_url: str = os.getenv("GUARDRAILS_AI_URL", "")
     external_guardrails_fail_closed: bool = _bool("EXTERNAL_GUARDRAILS_FAIL_CLOSED", "false")
+
+    audit_s3_bucket: str = os.getenv("AUDIT_S3_BUCKET", "")
+    audit_s3_prefix: str = os.getenv("AUDIT_S3_PREFIX", "copyright-rag-audit/")
+    audit_worm_required: bool = _bool("AUDIT_WORM_REQUIRED", "false")
+    audit_retention_days: int = int(os.getenv("AUDIT_RETENTION_DAYS", "365"))
 
     otel_enabled: bool = _bool("OTEL_ENABLED", "false")
     otel_service_name: str = os.getenv("OTEL_SERVICE_NAME", "copyright-secure-rag")

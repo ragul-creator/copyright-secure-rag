@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
+from src.config import settings
 from src.models import SourceRegistration
 from src.services.db import execute, query, audit
 from src.security.rights_policy import rights_allowed
@@ -26,6 +27,24 @@ def register_source(tenant_id: str, src: SourceRegistration):
            "license_spdx":src.license_spdx}, tenant_id)
 
 
+def add_compliance_evidence(tenant_id: str, source_id: str, tool: str, artifact_uri: str,
+                            artifact_sha256: str, verdict: str, details: dict):
+    import json
+    if not get_source(tenant_id, source_id):
+        raise LicenseError("UNKNOWN_SOURCE")
+    execute("""INSERT INTO compliance_evidence(tenant_id,source_id,tool,artifact_uri,artifact_sha256,verdict,details_json,created_at)
+               VALUES(?,?,?,?,?,?,?,?)""",
+            (tenant_id,source_id,tool,artifact_uri,artifact_sha256,verdict,json.dumps(details,sort_keys=True),datetime.now(timezone.utc).isoformat()))
+    audit({"event":"compliance_evidence_added","source_id":source_id,"tool":tool,"verdict":verdict,
+           "artifact_sha256":artifact_sha256},tenant_id)
+
+
+def latest_compliance_verdict(tenant_id: str, source_id: str) -> str | None:
+    rows=query("SELECT verdict FROM compliance_evidence WHERE tenant_id=? AND source_id=? ORDER BY id DESC LIMIT 1",
+               (tenant_id,source_id))
+    return str(rows[0]["verdict"]) if rows else None
+
+
 def get_source(tenant_id: str, source_id: str):
     rows = query("SELECT * FROM sources WHERE tenant_id=? AND source_id=?", (tenant_id, source_id))
     return rows[0] if rows else None
@@ -43,6 +62,10 @@ def source_is_active(tenant_id: str, src: dict, action: str = "retrieve") -> tup
                 return False, "LICENSE_EXPIRED"
         except ValueError:
             return False, "INVALID_EXPIRY"
+    if settings.require_compliance_evidence:
+        verdict=latest_compliance_verdict(tenant_id,src["source_id"])
+        if verdict != "approved":
+            return False, "COMPLIANCE_EVIDENCE_REQUIRED" if verdict is None else f"COMPLIANCE_{verdict.upper()}"
     return rights_allowed(tenant_id, src, action)
 
 

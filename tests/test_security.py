@@ -1,5 +1,6 @@
+from src.config import settings
 from src.models import SourceRegistration
-from src.security.licenses import register_source, LicenseError
+from src.security.licenses import register_source, add_compliance_evidence, LicenseError
 from src.services.ingestion import ingest_document
 from src.services.chat import chat
 from src.services.db import verify_audit_chain, execute
@@ -60,6 +61,23 @@ def test_revocation_applies_at_retrieval_without_reingest():
     after=chat("T3","When is premium support available?")
     assert not after["citations"]
     assert after["decision"] == "ESCALATE"
+
+
+def test_compliance_evidence_can_be_required():
+    previous=settings.require_compliance_evidence
+    object.__setattr__(settings,"require_compliance_evidence",True)
+    try:
+        register_source("T5",source("EVIDENCE"))
+        try:
+            ingest_document("T5","EVIDENCE","D-E","Evidence-gated document")
+            assert False
+        except LicenseError as exc:
+            assert "COMPLIANCE_EVIDENCE_REQUIRED" in str(exc)
+        add_compliance_evidence("T5","EVIDENCE","scancode","file://scan.json","a"*64,"approved",{})
+        result=ingest_document("T5","EVIDENCE","D-E","Evidence-gated document")
+        assert result["chunks"] == 1
+    finally:
+        object.__setattr__(settings,"require_compliance_evidence",previous)
 
 
 def test_audit_chain_is_tamper_evident():

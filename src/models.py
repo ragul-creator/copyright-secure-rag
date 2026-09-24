@@ -21,6 +21,14 @@ class SourceStatusUpdate(BaseModel):
     status: Literal["approved", "review", "revoked"]
 
 
+class ComplianceEvidenceCreate(BaseModel):
+    tool: Literal["scancode", "ort", "manual", "other"]
+    artifact_uri: str
+    artifact_sha256: str = Field(min_length=64, max_length=64)
+    verdict: Literal["approved", "review", "rejected"]
+    details: dict = Field(default_factory=dict)
+
+
 class IngestRequest(BaseModel):
     source_id: str
     document_id: str
