@@ -9,4 +9,5 @@ prometheus-client>=0.20
 streamlit>=1.38
 requests>=2.32
 python-multipart>=0.0.9
+PyJWT>=2.9
 pytest>=8.2

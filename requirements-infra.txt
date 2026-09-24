@@ -1,0 +1,8 @@
+-r requirements.txt
+qdrant-client>=1.11
+psycopg[binary]>=3.2
+datasketch>=1.6
+opentelemetry-api>=1.27
+opentelemetry-sdk>=1.27
+opentelemetry-exporter-otlp>=1.27
+opentelemetry-instrumentation-fastapi>=0.48b0

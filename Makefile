@@ -1,7 +1,10 @@
-.PHONY: install install-prod test bootstrap api ui up down bom
+.PHONY: install install-infra install-prod test bootstrap api ui up down bom token
 
 install:
 	python -m pip install -r requirements.txt
+
+install-infra:
+	python -m pip install -r requirements-infra.txt
 
 install-prod:
 	python -m pip install -r requirements-production.txt
@@ -26,3 +29,6 @@ down:
 
 bom:
 	PYTHONPATH=. python scripts/generate_cyclonedx_data_bom.py
+
+token:
+	PYTHONPATH=. python scripts/issue_dev_token.py

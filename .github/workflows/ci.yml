@@ -19,4 +19,12 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.txt
+      - run: python -m compileall -q src apps scripts
       - run: python -m pytest -q
+      - run: docker compose config >/dev/null
+
+  opa-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker run --rm -v "$PWD/policies/opa:/policies:ro" openpolicyagent/opa:latest check /policies
