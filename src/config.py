@@ -36,6 +36,11 @@ class Settings:
     embedding_backend: str = os.getenv("EMBEDDING_BACKEND", "hashing")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "384"))
+    retrieval_min_score: float = float(os.getenv("RETRIEVAL_MIN_SCORE", "0.12"))
+
+    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+    allowed_upload_extensions: str = os.getenv("ALLOWED_UPLOAD_EXTENSIONS", ".txt,.md,.markdown,.html,.htm,.pdf")
+    cors_origins: str = os.getenv("CORS_ORIGINS", "")
 
     max_exact_words: int = int(os.getenv("COPYRIGHT_MAX_EXACT_WORDS", "28"))
     ngram_threshold: float = float(os.getenv("COPYRIGHT_NGRAM_THRESHOLD", "0.55"))
